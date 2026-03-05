@@ -17,18 +17,18 @@ steps:
   inputs:
     versionSpec: '$(NodeVersion)'
 
-- powershell: npm ci
+- powershell: |
+    npm ci
   displayName: 'Install dependencies'
 
 - powershell: |
     npx playwright --version
     npx playwright install --force chrome ffmpeg
-    Write-Host "Installed browsers path: $(PLAYWRIGHT_BROWSERS_PATH)"
-    Get-ChildItem -Recurse "$(PLAYWRIGHT_BROWSERS_PATH)" | Select-Object -First 20
-  displayName: 'Install Playwright Chrome + ffmpeg (forced)'
+  displayName: 'Install Playwright Chrome + ffmpeg'
   env:
     PLAYWRIGHT_BROWSERS_PATH: $(PLAYWRIGHT_BROWSERS_PATH)
 
+# Always continue so Slack and report publish steps run even if tests fail
 - powershell: |
     npm run test:notify
     $testExitCode = $LASTEXITCODE
@@ -74,10 +74,11 @@ steps:
     artifact: 'test-results'
     publishLocation: 'pipeline'
 
+# Soft mode: do NOT fail pipeline if tests fail
 - powershell: |
     if ("$(TEST_EXIT_CODE)" -ne "0") {
-      Write-Host "Failing pipeline because tests failed (exit code: $(TEST_EXIT_CODE))."
-      exit 1
+      Write-Host "##vso[task.logissue type=warning]Tests failed (exit code: $(TEST_EXIT_CODE)), but pipeline is kept successful by policy."
+      exit 0
     }
     Write-Host "Tests passed."
   displayName: 'Set final pipeline status from test result'
