@@ -21,9 +21,11 @@ steps:
   displayName: 'Install dependencies'
 
 - powershell: |
-    npx playwright install chrome
-  displayName: 'Install Playwright browser (Chrome)'
+    npx playwright install chrome ffmpeg
+  displayName: 'Install Playwright browser (Chrome) + ffmpeg'
 
+# Run tests + Slack notification.
+# Always continue so result/artifact publish steps run even when tests fail.
 - powershell: |
     npm run test:notify
     $testExitCode = $LASTEXITCODE
@@ -68,6 +70,7 @@ steps:
     artifact: 'test-results'
     publishLocation: 'pipeline'
 
+# Fail pipeline at the end if tests failed.
 - powershell: |
     if ("$(TEST_EXIT_CODE)" -ne "0") {
       Write-Host "Failing pipeline because tests failed (exit code: $(TEST_EXIT_CODE))."
