@@ -1,0 +1,78 @@
+trigger:
+- main
+
+pr:
+- main
+
+pool:
+  vmImage: 'windows-latest'
+
+variables:
+  NodeVersion: '20.x'
+
+steps:
+- task: NodeTool@0
+  displayName: 'Use Node.js $(NodeVersion)'
+  inputs:
+    versionSpec: '$(NodeVersion)'
+
+- powershell: |
+    npm ci
+  displayName: 'Install dependencies'
+
+- powershell: |
+    npx playwright install chrome
+  displayName: 'Install Playwright browser (Chrome)'
+
+- powershell: |
+    npm run test:notify
+    $testExitCode = $LASTEXITCODE
+    Write-Host "test:notify exit code: $testExitCode"
+    Write-Host "##vso[task.setvariable variable=TEST_EXIT_CODE]$testExitCode"
+    exit 0
+  displayName: 'Run E2E tests and notify Slack'
+  env:
+    MS_EMAIL: $(MS_EMAIL)
+    MS_PASSWORD: $(MS_PASSWORD)
+    SLACK_WEBHOOK_URL: $(SLACK_WEBHOOK_URL)
+    SLACK_BOT_TOKEN: $(SLACK_BOT_TOKEN)
+    SLACK_CHANNEL_ID: $(SLACK_CHANNEL_ID)
+    SLACK_HTML_REPORT_PATH: $(SLACK_HTML_REPORT_PATH)
+    SLACK_HTML_REPORT_NAME: $(SLACK_HTML_REPORT_NAME)
+    SLACK_TEST_DETAIL_LIMIT: $(SLACK_TEST_DETAIL_LIMIT)
+
+- task: PublishTestResults@2
+  displayName: 'Publish JUnit test results'
+  condition: always()
+  inputs:
+    testResultsFormat: 'JUnit'
+    testResultsFiles: '**/test-results/junit-results.xml'
+    searchFolder: '$(System.DefaultWorkingDirectory)'
+    mergeTestResults: true
+    failTaskOnFailedTests: false
+    testRunTitle: 'Playwright E2E'
+
+- task: PublishPipelineArtifact@1
+  displayName: 'Publish Playwright HTML report'
+  condition: always()
+  inputs:
+    targetPath: '$(System.DefaultWorkingDirectory)/playwright-report'
+    artifact: 'playwright-report'
+    publishLocation: 'pipeline'
+
+- task: PublishPipelineArtifact@1
+  displayName: 'Publish raw test outputs'
+  condition: always()
+  inputs:
+    targetPath: '$(System.DefaultWorkingDirectory)/test-results'
+    artifact: 'test-results'
+    publishLocation: 'pipeline'
+
+- powershell: |
+    if ("$(TEST_EXIT_CODE)" -ne "0") {
+      Write-Host "Failing pipeline because tests failed (exit code: $(TEST_EXIT_CODE))."
+      exit 1
+    }
+    Write-Host "Tests passed."
+  displayName: 'Set final pipeline status from test result'
+  condition: always()
