@@ -9,6 +9,7 @@ pool:
 
 variables:
   NodeVersion: '20.x'
+  PLAYWRIGHT_BROWSERS_PATH: '$(Pipeline.Workspace)/ms-playwright'
 
 steps:
 - task: NodeTool@0
@@ -16,16 +17,18 @@ steps:
   inputs:
     versionSpec: '$(NodeVersion)'
 
-- powershell: |
-    npm ci
+- powershell: npm ci
   displayName: 'Install dependencies'
 
 - powershell: |
-    npx playwright install chrome ffmpeg
-  displayName: 'Install Playwright browser (Chrome) + ffmpeg'
+    npx playwright --version
+    npx playwright install --force chrome ffmpeg
+    Write-Host "Installed browsers path: $(PLAYWRIGHT_BROWSERS_PATH)"
+    Get-ChildItem -Recurse "$(PLAYWRIGHT_BROWSERS_PATH)" | Select-Object -First 20
+  displayName: 'Install Playwright Chrome + ffmpeg (forced)'
+  env:
+    PLAYWRIGHT_BROWSERS_PATH: $(PLAYWRIGHT_BROWSERS_PATH)
 
-# Run tests + Slack notification.
-# Always continue so result/artifact publish steps run even when tests fail.
 - powershell: |
     npm run test:notify
     $testExitCode = $LASTEXITCODE
@@ -34,6 +37,7 @@ steps:
     exit 0
   displayName: 'Run E2E tests and notify Slack'
   env:
+    PLAYWRIGHT_BROWSERS_PATH: $(PLAYWRIGHT_BROWSERS_PATH)
     MS_EMAIL: $(MS_EMAIL)
     MS_PASSWORD: $(MS_PASSWORD)
     SLACK_WEBHOOK_URL: $(SLACK_WEBHOOK_URL)
@@ -70,7 +74,6 @@ steps:
     artifact: 'test-results'
     publishLocation: 'pipeline'
 
-# Fail pipeline at the end if tests failed.
 - powershell: |
     if ("$(TEST_EXIT_CODE)" -ne "0") {
       Write-Host "Failing pipeline because tests failed (exit code: $(TEST_EXIT_CODE))."
